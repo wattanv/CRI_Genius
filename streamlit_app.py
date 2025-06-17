@@ -6,7 +6,6 @@ from datetime import datetime
 from PIL import Image
 from collections import Counter
 import numpy as np
-import cv2
 import io
 import os
 from roboflow import Roboflow
