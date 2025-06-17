@@ -1,5 +1,3 @@
-# streamlit_app.py
-
 # =================================================================
 # 1. Import ไลบรารีที่จำเป็นทั้งหมด
 # =================================================================
@@ -23,7 +21,6 @@ import random
 # =================================================================
 st.set_page_config(page_title="CRI Genius", layout="wide")
 
-# --- โค้ดสำหรับ UI Styles และ Header ---
 st.markdown(
     """
     <div style="
@@ -61,7 +58,6 @@ div.stButton > button {
 </style>
 """, unsafe_allow_html=True)
 
-# --- ฟังก์ชันสำหรับโหลดโมเดล AI ---
 @st.cache_resource
 def load_models():
     """โหลดโมเดลจาก Roboflow และคืนค่าเป็น tuple"""
@@ -75,13 +71,11 @@ def load_models():
         st.error(f"❌ ไม่สามารถเชื่อมต่อ AI ได้: {e}")
         return None, None
 
-# --- ฟังก์ชันสำหรับบันทึกข้อมูล ---
 def save_results_to_csv(data, filename="analysis_history.csv"):
     df = pd.DataFrame([data])
     file_exists = os.path.exists(filename)
     df.to_csv(filename, mode='a', index=False, header=not file_exists, encoding='utf-8-sig')
 
-# สั่งให้โหลดโมเดลและเตรียม Session State
 detector_model, classifier_model = load_models()
 if 'analysis_results' not in st.session_state:
     st.session_state.analysis_results = None
@@ -91,7 +85,6 @@ if 'analysis_results' not in st.session_state:
 # =================================================================
 col_main_left, col_main_right = st.columns([1, 1.2])
 
-# --- UI ฝั่งซ้าย (Input) ---
 with col_main_left:
     st.markdown("""<div class="inline-label"><img src="https://img.icons8.com/ios-filled/50/2176FF/calendar--v1.png"/><span>วันที่วิเคราะห์</span></div>""", unsafe_allow_html=True)
     st.date_input("", datetime.today(), key="date_input", label_visibility="collapsed")
@@ -116,7 +109,6 @@ with col_main_left:
     
     process_button = st.button("ประมวลผล")
 
-# --- Logic การประมวลผล ---
 if process_button:
     st.session_state.analysis_results = None 
 
@@ -124,8 +116,7 @@ if process_button:
         st.warning("⚠️ กรุณาอัปโหลดรูปภาพก่อนกดประมวลผล")
     elif not detector_model or not classifier_model:
         st.error("❌ โมเดล AI ยังไม่พร้อมใช้งาน ไม่สามารถประมวลผลได้")
-    
-    # โหมดทดสอบ 1: สุ่มผลลัพธ์
+
     elif st.session_state.get("analyst") == "test1":
         st.info("โหมดทดสอบ 1: กำลังสุ่มข้อมูล")
         with st.spinner("กำลังสร้างข้อมูล..."):
@@ -139,7 +130,6 @@ if process_button:
         st.success("✅ แสดงผลด้วยข้อมูลสุ่มสำเร็จ!")
         st.rerun()
 
-    # โหมดทดสอบ 2: ค่าคงที่
     elif st.session_state.get("analyst") == "test2":
         st.info("โหมดทดสอบ 2: กำลังใช้ข้อมูลคงที่")
         with st.spinner("กำลังสร้างข้อมูล..."):
@@ -149,7 +139,6 @@ if process_button:
         st.success("✅ แสดงผลด้วยข้อมูลคงที่สำเร็จ!")
         st.rerun()
 
-    # การทำงานปกติ
     else:
         try:
             with st.spinner("🧠 กำลังประมวลผลด้วย AI..."):
@@ -203,7 +192,6 @@ if process_button:
             st.error(f"😭 เกิดข้อผิดพลาดร้ายแรง: {e}")
         st.rerun()
 
-# --- UI ฝั่งขวา (แสดงผล) ---
 with col_main_right:
     results = st.session_state.analysis_results
 
