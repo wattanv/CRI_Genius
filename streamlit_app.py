@@ -1,21 +1,4 @@
 # =================================================================
-# 1. Import ไลบรารีที่จำเป็นทั้งหมด
-# =================================================================
-import streamlit as st
-from datetime import datetime
-from PIL import Image
-from collections import Counter
-import numpy as np
-import io
-import os
-from roboflow import Roboflow
-import time
-import shutil
-import pandas as pd
-import plotly.express as px
-import random
-
-# =================================================================
 # 2. ตั้งค่าหน้าเว็บ, UI Styles, และโหลดโมเดล
 # =================================================================
 st.set_page_config(page_title="CRI Genius", layout="wide")
