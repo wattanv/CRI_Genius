@@ -256,18 +256,44 @@ with col_main_right:
 # =================================================================
 with col_main_left:
     if st.session_state.analysis_results:
-        st.markdown("---")
-        st.subheader("กราฟสรุปจำนวนผลึก")
-        
         results_for_graph = st.session_state.analysis_results
-        chart_data = {'Class': ['Class 3','Class 2','Class 1','Class 0'], 'Count': [results_for_graph.get(k,0) for k in ["N3","N2","N1","N0"]]}
-        df_chart = pd.DataFrame(chart_data)
+        total_grains_for_graph = results_for_graph.get("total_grains", 0)
 
-        fig_bar = px.bar(
-            df_chart[df_chart['Count'] > 0], x='Class', y='Count', color='Class', text_auto=True,
-            color_discrete_map={'Class 3': '#4CAF50','Class 2': '#8BC34A','Class 1': '#FFC107','Class 0': '#F44336'},
-            labels={'Count': 'จำนวนเม็ด', 'Class': ''}
-        )
-        fig_bar.update_layout(showlegend=False, yaxis_title=None, xaxis_title=None)
-        fig_bar.update_traces(textposition='outside')
-        st.plotly_chart(fig_bar, use_container_width=True)
+        if total_grains_for_graph > 0:
+            st.markdown("---")
+            st.subheader("กราฟสัดส่วนผลึก (%)")
+
+            n_values = {
+                "คะแนน 3": results_for_graph.get("N3", 0),
+                "คะแนน 2": results_for_graph.get("N2", 0),
+                "คะแนน 1": results_for_graph.get("N1", 0),
+                "คะแนน 0": results_for_graph.get("N0", 0)
+            }
+            
+            chart_data = {
+                'ประเภทคะแนน': list(n_values.keys()),
+                'จำนวน': list(n_values.values())
+            }
+            df_chart = pd.DataFrame(chart_data)
+
+            df_chart['เปอร์เซ็นต์'] = (df_chart['จำนวน'] / total_grains_for_graph) * 100
+
+            fig_bar = px.bar(
+                df_chart[df_chart['จำนวน'] > 0], 
+                x='ประเภทคะแนน', 
+                y='เปอร์เซ็นต์', 
+                color='ประเภทคะแนน',
+                text_auto='.2f', 
+                color_discrete_map={
+                    'คะแนน 3': '#4CAF50', 
+                    'คะแนน 2': '#8BC34A',
+                    'คะแนน 1': '#FFC107', 
+                    'คะแนน 0': '#F44336'
+                },
+                labels={'เปอร์เซ็นต์': 'สัดส่วน (%)', 'ประเภทคะแนน': ''}
+            )
+
+            fig_bar.update_traces(texttemplate='%{y:.2f}%', textposition='outside')
+            fig_bar.update_layout(showlegend=False, yaxis_title=None, xaxis_title=None)
+            
+            st.plotly_chart(fig_bar, use_container_width=True)
