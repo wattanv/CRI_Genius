@@ -21,7 +21,6 @@ import random
 # =================================================================
 st.set_page_config(page_title="CRI Genius", layout="wide")
 
-# --- โค้ดสำหรับ UI Styles และ Header ---
 st.markdown(
     """
     <div style="
@@ -59,12 +58,10 @@ div.stButton > button {
 </style>
 """, unsafe_allow_html=True)
 
-# --- ฟังก์ชันสำหรับโหลดโมเดล AI (ใช้ cache เพื่อความเร็ว) ---
 @st.cache_resource
 def load_models():
     """โหลดโมเดลจาก Roboflow และคืนค่าเป็น tuple"""
     try:
-        # **สำคัญมาก:** กรุณาใส่ API KEY ที่ถูกต้องของคุณ
         DETECTOR_API_KEY = "FIv4Ev7vj8vn5EGPeTpY"
         CLASSIFIER_API_KEY = "FIv4Ev7vj8vn5EGPeTpY"
         
@@ -75,13 +72,11 @@ def load_models():
         st.error(f"❌ ไม่สามารถเชื่อมต่อ AI ได้: {e}")
         return None, None
 
-# --- ฟังก์ชันสำหรับบันทึกข้อมูล ---
 def save_results_to_csv(data, filename="analysis_history.csv"):
     df = pd.DataFrame([data])
     file_exists = os.path.exists(filename)
     df.to_csv(filename, mode='a', index=False, header=not file_exists, encoding='utf-8-sig')
 
-# --- ฟังก์ชัน Helper: ปรับขนาดภาพพร้อม Padding ---
 def resize_with_padding(image, target_size=(640, 640), color=(128, 128, 128)):
     original_w, original_h = image.size
     target_w, target_h = target_size
@@ -96,7 +91,6 @@ def resize_with_padding(image, target_size=(640, 640), color=(128, 128, 128)):
     new_image.paste(resized_image, (offset_x, offset_y))
     return new_image, ratio, (offset_x, offset_y)
 
-# สั่งให้โหลดโมเดลและเตรียม Session State
 detector_model, classifier_model = load_models()
 if 'analysis_results' not in st.session_state:
     st.session_state.analysis_results = None
@@ -106,7 +100,6 @@ if 'analysis_results' not in st.session_state:
 # =================================================================
 col_main_left, col_main_right = st.columns([1, 1.2])
 
-# --- UI ฝั่งซ้าย (Input) ---
 with col_main_left:
     st.markdown("""<div class="inline-label"><img src="https://img.icons8.com/ios-filled/50/2176FF/calendar--v1.png"/><span>วันที่วิเคราะห์</span></div>""", unsafe_allow_html=True)
     st.date_input("", datetime.today(), key="date_input", label_visibility="collapsed")
@@ -138,7 +131,6 @@ with col_main_left:
 
     process_button = st.button("ประมวลผล")
 
-# --- Logic การประมวลผล ---
 if process_button:
     st.session_state.analysis_results = None 
     if uploaded_file is None:
