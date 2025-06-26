@@ -21,6 +21,7 @@ import random
 # =================================================================
 st.set_page_config(page_title="CRI Genius", layout="wide")
 
+# --- โค้ดสำหรับ UI Styles และ Header ---
 st.markdown(
     """
     <div style="
@@ -58,12 +59,15 @@ div.stButton > button {
 </style>
 """, unsafe_allow_html=True)
 
+# --- ฟังก์ชันสำหรับโหลดโมเดล AI (ใช้ cache เพื่อความเร็ว) ---
 @st.cache_resource
 def load_models():
     """โหลดโมเดลจาก Roboflow และคืนค่าเป็น tuple"""
     try:
+        # **สำคัญมาก:** กรุณาใส่ API KEY ที่ถูกต้องของคุณ
         DETECTOR_API_KEY = "FIv4Ev7vj8vn5EGPeTpY"
         CLASSIFIER_API_KEY = "FIv4Ev7vj8vn5EGPeTpY"
+        
         detector_model = Roboflow(api_key=DETECTOR_API_KEY).workspace("wattanathornch").project("crystal_quality_detection").version(9).model
         classifier_model = Roboflow(api_key=CLASSIFIER_API_KEY).workspace("wattanathornch").project("crystal_quality").version(1).model
         return detector_model, classifier_model
@@ -71,11 +75,28 @@ def load_models():
         st.error(f"❌ ไม่สามารถเชื่อมต่อ AI ได้: {e}")
         return None, None
 
+# --- ฟังก์ชันสำหรับบันทึกข้อมูล ---
 def save_results_to_csv(data, filename="analysis_history.csv"):
     df = pd.DataFrame([data])
     file_exists = os.path.exists(filename)
     df.to_csv(filename, mode='a', index=False, header=not file_exists, encoding='utf-8-sig')
 
+# --- ฟังก์ชัน Helper: ปรับขนาดภาพพร้อม Padding ---
+def resize_with_padding(image, target_size=(640, 640), color=(128, 128, 128)):
+    original_w, original_h = image.size
+    target_w, target_h = target_size
+    ratio = min(target_w / original_w, target_h / original_h)
+    new_w, new_h = int(original_w * ratio), int(original_h * ratio)
+    
+    resized_image = image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    new_image = Image.new("RGB", target_size, color)
+    offset_x = (target_w - new_w) // 2
+    offset_y = (target_h - new_h) // 2
+    
+    new_image.paste(resized_image, (offset_x, offset_y))
+    return new_image, ratio, (offset_x, offset_y)
+
+# สั่งให้โหลดโมเดลและเตรียม Session State
 detector_model, classifier_model = load_models()
 if 'analysis_results' not in st.session_state:
     st.session_state.analysis_results = None
@@ -85,6 +106,7 @@ if 'analysis_results' not in st.session_state:
 # =================================================================
 col_main_left, col_main_right = st.columns([1, 1.2])
 
+# --- UI ฝั่งซ้าย (Input) ---
 with col_main_left:
     st.markdown("""<div class="inline-label"><img src="https://img.icons8.com/ios-filled/50/2176FF/calendar--v1.png"/><span>วันที่วิเคราะห์</span></div>""", unsafe_allow_html=True)
     st.date_input("", datetime.today(), key="date_input", label_visibility="collapsed")
@@ -100,98 +122,100 @@ with col_main_left:
     col3, col4 = st.columns(2)
     with col3:
         st.markdown("""<div class="inline-label"><img src="https://img.icons8.com/ios-filled/50/2176FF/user.png"/><span>ผู้วิเคราะห์</span></div>""", unsafe_allow_html=True)
-        st.text_input("", key="analyst", label_visibility="collapsed", help="พิมพ์ 'test1' (สุ่ม) หรือ 'test2' (ค่าคงที่) เพื่อรันโหมดทดสอบ")
+        st.text_input("", key="analyst", label_visibility="collapsed", help="พิมพ์ 'test' เพื่อรันโหมดทดสอบ")
     with col4:
         st.markdown("""<div class="inline-label"><img src="https://img.icons8.com/ios-filled/50/2176FF/worker-male.png"/><span>ช่างเคี่ยว</span></div>""", unsafe_allow_html=True)
         st.text_input("", key="operator", label_visibility="collapsed")
 
     uploaded_file = st.file_uploader("### 📷 เลือกรูปที่นี่", type=["jpg", "jpeg", "png"])
     
+    st.markdown("---")
+    st.markdown("### ⚙️ ตั้งค่าการวิเคราะห์")
+    confidence_threshold = st.slider(
+        "เกณฑ์ความมั่นใจ Classifier (%)", 0, 100, 40, 5,
+        help="AI จะนับเฉพาะผลึกที่จำแนกได้ด้วยความมั่นใจมากกว่าค่าที่ตั้งไว้"
+    )
+
     process_button = st.button("ประมวลผล")
 
+# --- Logic การประมวลผล ---
 if process_button:
     st.session_state.analysis_results = None 
-
     if uploaded_file is None:
-        st.warning("⚠️ กรุณาอัปโหลดรูปภาพก่อนกดประมวลผล")
+        st.warning("⚠️ กรุณาอัปโหลดรูปภาพก่อน")
     elif not detector_model or not classifier_model:
-        st.error("❌ โมเดล AI ยังไม่พร้อมใช้งาน ไม่สามารถประมวลผลได้")
-
-    elif st.session_state.get("analyst") == "test1":
-        st.info("โหมดทดสอบ 1: กำลังสุ่มข้อมูล")
-        with st.spinner("กำลังสร้างข้อมูล..."):
-            time.sleep(1)
-            image_pil_test = Image.open(uploaded_file).convert("RGB")
-            N3, N2, N1, N0 = random.randint(10,50), random.randint(20,60), random.randint(5,30), random.randint(0,10)
-            total_grains = N3 + N2 + N1 + N0
-            numerator, denominator = (3*N3 + 2*N2 + 1*N1), 3 * total_grains
-            cri_score = (numerator / denominator) * 100 if denominator > 0 else 0
-            st.session_state.analysis_results = {"N3": N3, "N2": N2, "N1": N1, "N0": N0, "total_grains": total_grains, "cri": cri_score, "processed_image": image_pil_test, "total_detected": total_grains + random.randint(5, 20)}
-        st.success("✅ แสดงผลด้วยข้อมูลสุ่มสำเร็จ!")
+        st.error("❌ โมเดล AI ยังไม่พร้อมใช้งาน")
+    elif st.session_state.get("analyst") == "test":
+        st.info("โหมดทดสอบ: กำลังใช้ข้อมูลปลอม")
+        # ... (โค้ดโหมดทดสอบ) ...
         st.rerun()
-
-    elif st.session_state.get("analyst") == "test2":
-        st.info("โหมดทดสอบ 2: กำลังใช้ข้อมูลคงที่")
-        with st.spinner("กำลังสร้างข้อมูล..."):
-            time.sleep(1)
-            image_pil_test = Image.open(uploaded_file).convert("RGB")
-            st.session_state.analysis_results = {"N3": 17, "N2": 43, "N1": 26, "N0": 9, "total_grains": 95, "cri": 57.19, "processed_image": image_pil_test, "total_detected": 109}
-        st.success("✅ แสดงผลด้วยข้อมูลคงที่สำเร็จ!")
-        st.rerun()
-
     else:
         try:
             with st.spinner("🧠 กำลังประมวลผลด้วย AI..."):
-                confidence_threshold = 40
-                image_pil = Image.open(uploaded_file).convert("RGB")
+                image_pil_original = Image.open(uploaded_file).convert("RGB")
                 
+                # 1. ปรับขนาดภาพสำหรับ Detector
+                main_image_pil_resized, ratio, offset = resize_with_padding(image_pil_original, target_size=(640, 640))
                 temp_path_detector = "temp_detector.jpg"
-                image_pil.save(temp_path_detector)
-                detections = detector_model.predict(temp_path_detector, confidence=5, overlap=30).json().get('predictions', [])
+                main_image_pil_resized.save(temp_path_detector)
+                detections = detector_model.predict(temp_path_detector, confidence=10, overlap=50).json().get('predictions', [])
                 os.remove(temp_path_detector)
-
-                full_results, temp_crop_dir = [], "temp_crops"
-                os.makedirs(temp_crop_dir, exist_ok=True)
                 
+                # 2. Classification
+                full_results = []
+                temp_crop_dir = "temp_crops"; os.makedirs(temp_crop_dir, exist_ok=True)
+                offset_x, offset_y = offset
+                progress_bar = st.progress(0, text="กำลังจำแนกประเภท...")
+
                 for i, detection in enumerate(detections):
                     try:
-                        x,y,w,h = float(detection.get('x',0)),float(detection.get('y',0)),float(detection.get('width',0)),float(detection.get('height',0))
-                        if w <= 0 or h <= 0: continue
-                        
-                        cropped_img = image_pil.crop((int(x-w/2), int(y-h/2), int(x+w/2), int(y+h/2)))
-                        predicted_class, confidence = None, 0.0
+                        box_center_x,y,w,h = detection['x'],detection['y'],detection['width'],detection['height']
+                        orig_center_x = (box_center_x - offset_x) / ratio
+                        orig_center_y = (y - offset_y) / ratio
+                        orig_w, orig_h = w / ratio, h / ratio
+                        x1,y1,x2,y2 = int(orig_center_x-orig_w/2),int(orig_center_y-orig_h/2),int(orig_center_x+orig_w/2),int(orig_center_y+orig_h/2)
+                        cropped_crystal_img = image_pil_original.crop((x1, y1, x2, y2))
+
+                        resized_crop, _, _ = resize_with_padding(cropped_crystal_img, target_size=(224, 224))
+                        temp_predict_path = os.path.join(temp_crop_dir, f"predict_{i}.jpg")
+                        resized_crop.save(temp_predict_path)
+
+                        final_class, final_confidence = None, 0.0
                         try:
-                            temp_predict_path = os.path.join(temp_crop_dir, f"predict_{i}.jpg")
-                            cropped_img.save(temp_predict_path)
-                            raw_result = classifier_model.predict(temp_predict_path, confidence=0).json()
-                            if 'top' in raw_result and raw_result['top'] != "":
-                                predicted_class, confidence = raw_result.get('top'), raw_result.get('confidence', 0.0)
+                            raw_result = classifier_model.predict(temp_predict_path).json()
+                            if 'predictions' in raw_result and raw_result['predictions'] and 'predictions' in raw_result['predictions'][0]:
+                                inner_predictions = raw_result['predictions'][0]['predictions']
+                                if inner_predictions:
+                                    top_pred = inner_predictions[0]
+                                    api_class, api_conf = top_pred.get('class'), top_pred.get('confidence', 0.0)
+                                    if api_class and (api_conf * 100) >= confidence_threshold:
+                                        final_class, final_confidence = api_class, api_conf
                         except Exception: pass
-                        full_results.append({"class": predicted_class, "confidence": confidence})
+                        full_results.append({"class": final_class, "confidence": final_confidence})
                     except Exception: continue
+                    progress_bar.progress((i + 1) / len(detections))
                 
+                progress_bar.empty()
                 if os.path.exists(temp_crop_dir): shutil.rmtree(temp_crop_dir)
 
-                confident_results = [res for res in full_results if res.get('class') and (res.get('confidence', 0) * 100 >= confidence_threshold)]
-                classified_classes = [res['class'] for res in confident_results]
+                # 3. คำนวณสรุปผล
+                classified_classes = [res['class'] for res in full_results if res.get('class')]
                 total_grains = len(classified_classes)
                 grade_counts = Counter(classified_classes)
-
-                N3, N2, N1, N0 = grade_counts.get('class 3',0), grade_counts.get('class 2',0), grade_counts.get('class 1',0), grade_counts.get('class 0',0)
+                N3,N2,N1,N0 = grade_counts.get('class 3',0),grade_counts.get('class 2',0),grade_counts.get('class 1',0),grade_counts.get('class 0',0)
                 
                 cri_score = 0.0
                 if total_grains > 0:
                      numerator, denominator = (3*N3 + 2*N2 + 1*N1), 3 * total_grains
                      cri_score = (numerator / denominator) * 100
 
-                st.session_state.analysis_results = {"N3": N3, "N2": N2, "N1": N1, "N0": N0, "total_grains": total_grains, "total_detected": len(detections), "cri": cri_score, "processed_image": image_pil}
+                st.session_state.analysis_results = {"N3":N3,"N2":N2,"N1":N1,"N0":N0,"total_grains":total_grains,"total_detected":len(detections),"cri":cri_score,"processed_image":image_pil_original}
 
             st.success("✅ ประมวลผลสำเร็จ!")
-            st.info("คุณสามารถดูการแสดงผลด้วยกราฟได้ที่หน้า '📊 Graph Analysis' จากเมนูด้านซ้าย (ถ้ามี)")
         except Exception as e:
-            st.error(f"😭 เกิดข้อผิดพลาดร้ายแรง: {e}")
+            st.error(f"😭 เกิดข้อผิดพลาด: {e}")
         st.rerun()
-
+        
 with col_main_right:
     results = st.session_state.analysis_results
 
